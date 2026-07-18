@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Datacenter;
 
 use App\Http\Controllers\Controller;
 use App\Models\Guru;
+use App\Models\MataPelajaran;
 use App\Models\StatusKepegawaian;
 use App\Services\Master\GuruExcelService;
 use Illuminate\Http\Request;
@@ -15,7 +16,7 @@ class GuruController extends Controller
         $items = Guru::when($r->q, function ($x) use ($r) {
                 $x->where('nama_ptk', 'like', "%{$r->q}%")
                   ->orWhere('nip', 'like', "%{$r->q}%");
-            })->orderBy('nama_ptk')->paginate(20)->withQueryString();
+            })->with('mapel')->orderBy('nama_ptk')->paginate(20)->withQueryString();
         return view('datacenter.guru.index', compact('items'));
     }
 
@@ -24,6 +25,7 @@ class GuruController extends Controller
         return view('datacenter.guru.form', [
             'item' => new Guru(),
             'statusOptions' => StatusKepegawaian::options(),
+            'mapelList' => $this->mapelList(),
         ]);
     }
 
@@ -44,7 +46,18 @@ class GuruController extends Controller
             $options[$guru->status_kepegawaian] = $guru->status_kepegawaian.' (non-aktif)';
         }
 
-        return view('datacenter.guru.form', ['item' => $guru, 'statusOptions' => $options]);
+        return view('datacenter.guru.form', [
+            'item' => $guru,
+            'statusOptions' => $options,
+            'mapelList' => $this->mapelList(),
+        ]);
+    }
+
+    /** Daftar mapel aktif untuk pilihan "Guru Mata Pelajaran" di form. */
+    protected function mapelList()
+    {
+        return MataPelajaran::where('is_aktif', true)
+            ->orderBy('nama_mapel')->pluck('nama_mapel', 'id');
     }
 
     public function update(Request $r, Guru $guru)
@@ -136,6 +149,7 @@ class GuruController extends Controller
             'alamat' => 'nullable|string|max:255',
             'jabatan' => 'nullable|string|max:100',
             'status_kepegawaian' => 'nullable|string|max:50|exists:status_kepegawaian,nama_status',
+            'mata_pelajaran_id' => 'nullable|integer|exists:mata_pelajaran,id',
             'password' => 'nullable|string|min:6',
             'is_aktif' => 'nullable|boolean',
         ]) + ['is_aktif' => $r->boolean('is_aktif', true)];

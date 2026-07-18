@@ -16,6 +16,8 @@
         <x-field name="tempat_lahir" label="Tempat Lahir" :value="$item->tempat_lahir"/>
         <x-field name="tanggal_lahir" type="date" label="Tanggal Lahir" :value="optional($item->tanggal_lahir)->format('Y-m-d')"/>
         <x-field name="jabatan" label="Jabatan" :value="$item->jabatan"/>
+        <x-field type="select" name="mata_pelajaran_id" label="Guru Mata Pelajaran" :value="$item->mata_pelajaran_id"
+                 :options="$mapelList->toArray()"/>
         <x-field type="select" name="status_kepegawaian" label="Status Kepegawaian" :value="$item->status_kepegawaian"
                  :options="$statusOptions"/>
         <x-field name="password" type="password" label="Password" :help="$item->exists ? 'Kosongkan jika tidak diubah' : 'Default sama dengan password'"/>

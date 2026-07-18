@@ -41,7 +41,7 @@
                            :checked="ids.length > 0 && selected.length === ids.length"
                            @change="selected = $event.target.checked ? [...ids] : []">
                 </th>
-                <th>NIP</th><th>Nama</th><th>JK</th><th>Jabatan</th><th>Status</th><th>Aktif</th><th></th>
+                <th>NIP</th><th>Nama</th><th>JK</th><th>Mapel Diajar</th><th>Jabatan</th><th>Status</th><th>Aktif</th><th></th>
             </tr></thead>
             <tbody>
             @forelse($items as $g)
@@ -56,6 +56,13 @@
                         </div>
                     </td>
                     <td>{{ $g->jenis_kelamin }}</td>
+                    <td>
+                        @if($g->mapel)
+                            <span class="badge-info">{{ $g->mapel->nama_mapel }}</span>
+                        @else
+                            <span class="text-ink-400">—</span>
+                        @endif
+                    </td>
                     <td>{{ $g->jabatan ?: '—' }}</td>
                     <td>{{ $g->status_kepegawaian ?: '—' }}</td>
                     <td>
@@ -79,7 +86,7 @@
                     </td>
                 </tr>
             @empty
-                <tr><td colspan="8" class="text-center py-8 text-ink-500">Belum ada data.</td></tr>
+                <tr><td colspan="9" class="text-center py-8 text-ink-500">Belum ada data.</td></tr>
             @endforelse
             </tbody>
         </table>

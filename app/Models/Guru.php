@@ -48,6 +48,11 @@ class Guru extends Authenticatable
         return $this->foto ? asset('storage/'.$this->foto) : null;
     }
 
+    public function mapel()
+    {
+        return $this->belongsTo(MataPelajaran::class, 'mata_pelajaran_id');
+    }
+
     public function guruMapel()
     {
         return $this->hasMany(GuruMapel::class);
