@@ -12,6 +12,7 @@ use App\Http\Controllers\Datacenter\PeriodikalController;
 use App\Http\Controllers\Datacenter\ResetSiswaController;
 use App\Http\Controllers\Datacenter\RombelController;
 use App\Http\Controllers\Datacenter\SiswaController;
+use App\Http\Controllers\Datacenter\StatusKepegawaianController;
 use App\Http\Controllers\Datacenter\TahunAjaranController;
 use App\Http\Controllers\Datacenter\TingkatKelasController;
 use App\Http\Controllers\LogLoginController;
@@ -79,6 +80,9 @@ Route::middleware([
 
         Route::resource('tingkat-kelas', TingkatKelasController::class)
             ->except('show')->parameters(['tingkat-kelas' => 'tingkatKelas']);
+
+        Route::resource('status-kepegawaian', StatusKepegawaianController::class)
+            ->except('show')->parameters(['status-kepegawaian' => 'statusKepegawaian']);
 
         Route::get('/guru/import',          [GuruController::class, 'importForm'])->name('guru.import.form');
         Route::post('/guru/import',         [GuruController::class, 'importStore'])->name('guru.import.store');

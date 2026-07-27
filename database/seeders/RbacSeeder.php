@@ -40,6 +40,7 @@ class RbacSeeder extends Seeder
             ['mapel/*', 'Kelola Mapel', 'datacenter'],
             ['tingkat-kelas/*', 'Kelola Tingkat Kelas', 'datacenter'],
             ['rombel/*', 'Kelola Rombel', 'datacenter'],
+            ['status-kepegawaian/*', 'Kelola Status Kepegawaian', 'datacenter'],
             ['guru/*', 'Kelola Guru', 'datacenter'],
             ['guru-mapel/*', 'Kelola Guru Mapel', 'datacenter'],
             ['siswa/*', 'Kelola Siswa', 'datacenter'],

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Datacenter;
 
 use App\Http\Controllers\Controller;
 use App\Models\Guru;
+use App\Models\StatusKepegawaian;
 use App\Services\Master\GuruExcelService;
 use Illuminate\Http\Request;
 
@@ -18,7 +19,13 @@ class GuruController extends Controller
         return view('datacenter.guru.index', compact('items'));
     }
 
-    public function create() { return view('datacenter.guru.form', ['item' => new Guru()]); }
+    public function create()
+    {
+        return view('datacenter.guru.form', [
+            'item' => new Guru(),
+            'statusOptions' => StatusKepegawaian::options(),
+        ]);
+    }
 
     public function store(Request $r)
     {
@@ -28,7 +35,17 @@ class GuruController extends Controller
         return redirect()->route('guru.index')->with('success', 'Data guru ditambahkan.');
     }
 
-    public function edit(Guru $guru) { return view('datacenter.guru.form', ['item' => $guru]); }
+    public function edit(Guru $guru)
+    {
+        // Status lama milik guru tetap dimunculkan walau sudah non-aktif /
+        // belum terdaftar di master, supaya nilai tidak hilang saat disimpan.
+        $options = StatusKepegawaian::options();
+        if ($guru->status_kepegawaian && ! isset($options[$guru->status_kepegawaian])) {
+            $options[$guru->status_kepegawaian] = $guru->status_kepegawaian.' (non-aktif)';
+        }
+
+        return view('datacenter.guru.form', ['item' => $guru, 'statusOptions' => $options]);
+    }
 
     public function update(Request $r, Guru $guru)
     {
@@ -118,7 +135,7 @@ class GuruController extends Controller
             'tanggal_lahir' => 'nullable|date',
             'alamat' => 'nullable|string|max:255',
             'jabatan' => 'nullable|string|max:100',
-            'status_kepegawaian' => 'nullable|string|max:50',
+            'status_kepegawaian' => 'nullable|string|max:50|exists:status_kepegawaian,nama_status',
             'password' => 'nullable|string|min:6',
             'is_aktif' => 'nullable|boolean',
         ]) + ['is_aktif' => $r->boolean('is_aktif', true)];

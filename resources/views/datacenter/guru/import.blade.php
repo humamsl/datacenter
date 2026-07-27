@@ -48,7 +48,7 @@
             <li><code>nip</code> dipakai sebagai kunci unik. Jika sudah ada → di-update; jika belum → dibuat baru.</li>
             <li><code>jenis_kelamin</code>: <code>L</code> atau <code>P</code></li>
             <li><code>tanggal_lahir</code>: format <code>YYYY-MM-DD</code> atau format tanggal Excel</li>
-            <li><code>status_kepegawaian</code>: PNS / PPPK / GTT / Honorer</li>
+            <li><code>status_kepegawaian</code>: sesuai master <a href="{{ route('status-kepegawaian.index') }}" class="text-brand-700 underline">Status Kepegawaian</a> (mis. PNS / PPPK / GTT / Honorer, tidak peka huruf besar-kecil). Status baru yang belum terdaftar akan otomatis terdeteksi &amp; ditambahkan ke master.</li>
             <li><code>password</code> opsional. Jika kosong & akun baru, default = NIP.</li>
             <li><code>is_aktif</code>: 1 atau 0 (jika kosong = 1)</li>
         </ul>

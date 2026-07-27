@@ -40,6 +40,9 @@
         <a href="{{ route('rombel.index') }}" class="sidebar-link {{ request()->routeIs('rombel.*') ? 'active' : '' }}">
             <x-icon name="grid"/> Rombongan Belajar
         </a>
+        <a href="{{ route('status-kepegawaian.index') }}" class="sidebar-link {{ request()->routeIs('status-kepegawaian.*') ? 'active' : '' }}">
+            <x-icon name="clipboard"/> Status Kepegawaian
+        </a>
         <a href="{{ route('guru.index') }}" class="sidebar-link {{ request()->routeIs('guru.*') ? 'active' : '' }}">
             <x-icon name="user-tie"/> Data Guru
         </a>

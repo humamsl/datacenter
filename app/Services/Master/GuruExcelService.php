@@ -3,6 +3,7 @@
 namespace App\Services\Master;
 
 use App\Models\Guru;
+use App\Models\StatusKepegawaian;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -23,7 +24,9 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  *
  * - jenis_kelamin: L atau P
  * - tanggal_lahir: format YYYY-MM-DD (atau date Excel)
- * - status_kepegawaian: PNS, PPPK, GTT, Honorer
+ * - status_kepegawaian: dicocokkan ke master Status Kepegawaian
+ *   (case-insensitive, "pns" → "PNS"). Status yang belum terdaftar
+ *   otomatis dideteksi & ditambahkan ke master sebagai status aktif.
  * - password: opsional. Jika kosong, default = password
  * - is_aktif: 1 / 0 / kosong (default 1)
  */
@@ -63,7 +66,7 @@ class GuruExcelService
                     'tanggal_lahir'      => $this->parseDate($assoc['tanggal_lahir'] ?? null),
                     'alamat'             => $assoc['alamat'] ?: null,
                     'jabatan'            => $assoc['jabatan'] ?: null,
-                    'status_kepegawaian' => $assoc['status_kepegawaian'] ?: null,
+                    'status_kepegawaian' => $this->resolveStatusKepegawaian($assoc['status_kepegawaian'] ?? null),
                     'is_aktif'           => $this->parseBool($assoc['is_aktif'] ?? 1, true),
                 ];
 
@@ -143,6 +146,36 @@ class GuruExcelService
     }
 
     /*    helpers    */
+
+    /** Peta lower(nama_status) → nama_status master, di-cache selama proses import. */
+    protected ?array $statusMap = null;
+
+    /**
+     * Cocokkan status kepegawaian dari Excel ke master (case-insensitive).
+     * Status yang belum ada di master otomatis terdeteksi dan didaftarkan
+     * sebagai status aktif baru, lalu langsung dipakai baris berikutnya.
+     */
+    protected function resolveStatusKepegawaian($raw): ?string
+    {
+        $raw = trim((string) $raw);
+        if ($raw === '') return null;
+
+        $this->statusMap ??= StatusKepegawaian::pluck('nama_status')
+            ->mapWithKeys(fn ($n) => [mb_strtolower($n) => $n])->all();
+
+        $key = mb_strtolower($raw);
+        if (! isset($this->statusMap[$key])) {
+            StatusKepegawaian::create([
+                'nama_status' => $raw,
+                'keterangan' => 'Terdeteksi otomatis dari import Excel data guru',
+                'is_aktif' => true,
+            ]);
+            $this->statusMap[$key] = $raw;
+        }
+
+        return $this->statusMap[$key];
+    }
+
     protected function styleHeader($sheet, int $colCount): void
     {
         $range = 'A1:'.chr(64 + $colCount).'1';
