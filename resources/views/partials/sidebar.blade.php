@@ -65,8 +65,8 @@
         </a>
 
         <div class="sidebar-section">Administrasi</div>
-        <a href="{{ route('reset-siswa.index') }}" class="sidebar-link {{ request()->routeIs('reset-siswa.*') ? 'active' : '' }}">
-            <x-icon name="trash"/> Reset Data Siswa
+        <a href="{{ route('reset-data.index') }}" class="sidebar-link {{ request()->routeIs('reset-data.*') ? 'active' : '' }}">
+            <x-icon name="trash"/> Reset Data
         </a>
         <a href="{{ route('log-login.index') }}" class="sidebar-link {{ request()->routeIs('log-login.*') ? 'active' : '' }}">
             <x-icon name="key"/> Log Login

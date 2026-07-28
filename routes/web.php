@@ -9,7 +9,7 @@ use App\Http\Controllers\Datacenter\JurusanController;
 use App\Http\Controllers\Datacenter\MataPelajaranController;
 use App\Http\Controllers\Datacenter\PengaturanController;
 use App\Http\Controllers\Datacenter\PeriodikalController;
-use App\Http\Controllers\Datacenter\ResetSiswaController;
+use App\Http\Controllers\Datacenter\ResetDataController;
 use App\Http\Controllers\Datacenter\RombelController;
 use App\Http\Controllers\Datacenter\SiswaController;
 use App\Http\Controllers\Datacenter\StatusKepegawaianController;
@@ -96,6 +96,7 @@ Route::middleware([
         Route::post('/guru-mapel/import',         [GuruMapelController::class, 'importStore'])->name('guru-mapel.import.store');
         Route::get('/guru-mapel/import-template', [GuruMapelController::class, 'importTemplate'])->name('guru-mapel.import.template');
         Route::get('/guru-mapel/export/excel',    [GuruMapelController::class, 'exportExcel'])->name('guru-mapel.export.excel');
+        Route::delete('/guru-mapel/bulk-destroy', [GuruMapelController::class, 'bulkDestroy'])->name('guru-mapel.bulk-destroy');
         Route::resource('guru-mapel', GuruMapelController::class)
             ->except('show')->parameters(['guru-mapel' => 'guruMapel']);
 
@@ -125,12 +126,18 @@ Route::middleware([
     Route::middleware('admin')->group(function () {
         Route::get('/log-login', [LogLoginController::class, 'index'])->name('log-login.index');
 
-        Route::prefix('reset-siswa')->name('reset-siswa.')->group(function () {
-            Route::get('/', [ResetSiswaController::class, 'index'])->name('index');
-            Route::post('/per-tingkat', [ResetSiswaController::class, 'perTingkat'])->name('per-tingkat');
-            Route::post('/per-rombel',  [ResetSiswaController::class, 'perRombel'])->name('per-rombel');
-            Route::post('/per-siswa',   [ResetSiswaController::class, 'perSiswa'])->name('per-siswa');
-            Route::post('/semua',       [ResetSiswaController::class, 'semua'])->name('semua');
+        Route::prefix('reset-data')->name('reset-data.')->group(function () {
+            Route::get('/', [ResetDataController::class, 'index'])->name('index');
+            Route::post('/per-tingkat', [ResetDataController::class, 'perTingkat'])->name('per-tingkat');
+            Route::post('/per-rombel',  [ResetDataController::class, 'perRombel'])->name('per-rombel');
+            Route::post('/per-siswa',   [ResetDataController::class, 'perSiswa'])->name('per-siswa');
+            Route::post('/semua',       [ResetDataController::class, 'semua'])->name('semua');
+            Route::post('/guru-mapel',  [ResetDataController::class, 'guruMapel'])->name('guru-mapel');
+            Route::post('/guru',        [ResetDataController::class, 'guru'])->name('guru');
+            Route::post('/rombel',      [ResetDataController::class, 'rombel'])->name('rombel');
         });
+
+        // Alias URL lama (bookmark) → halaman baru
+        Route::redirect('/reset-siswa', '/reset-data');
     });
 });

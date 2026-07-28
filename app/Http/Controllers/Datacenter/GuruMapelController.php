@@ -98,6 +98,20 @@ class GuruMapelController extends Controller
         return back()->with('success', 'Data dihapus.');
     }
 
+    /** Hapus banyak penugasan sekaligus (dipilih lewat checkbox di daftar). */
+    public function bulkDestroy(Request $r)
+    {
+        $data = $r->validate([
+            'ids' => 'required|array|min:1',
+            'ids.*' => 'integer|exists:guru_mapel,id',
+        ]);
+
+        $count = GuruMapel::whereIn('id', $data['ids'])->count();
+        GuruMapel::whereIn('id', $data['ids'])->delete();
+
+        return back()->with('success', "{$count} data penugasan guru mapel dihapus.");
+    }
+
     /* ===================== IMPORT / EXPORT ===================== */
 
     public function importForm()
