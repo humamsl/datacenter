@@ -4,9 +4,13 @@ namespace App\Http\Controllers\Datacenter;
 
 use App\Http\Controllers\Controller;
 use App\Models\Guru;
+use App\Models\GuruMapel;
+use App\Models\MataPelajaran;
 use App\Models\StatusKepegawaian;
+use App\Models\TahunAjaran;
 use App\Services\Master\GuruExcelService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class GuruController extends Controller
 {
@@ -24,14 +28,18 @@ class GuruController extends Controller
         return view('datacenter.guru.form', [
             'item' => new Guru(),
             'statusOptions' => StatusKepegawaian::options(),
+            'mapelList' => MataPelajaran::orderBy('nama_mapel')->get(),
+            'mapelTerpilih' => [],
         ]);
     }
 
     public function store(Request $r)
     {
         $data = $this->v($r);
+        $mapelIds = $this->vMapel($r);
         $data['password'] = $data['password'] ?? 'password'; // password default untuk guru baru
-        Guru::create($data);
+        $guru = Guru::create($data);
+        $this->syncMapel($guru, $mapelIds);
         return redirect()->route('guru.index')->with('success', 'Data guru ditambahkan.');
     }
 
@@ -44,14 +52,21 @@ class GuruController extends Controller
             $options[$guru->status_kepegawaian] = $guru->status_kepegawaian.' (non-aktif)';
         }
 
-        return view('datacenter.guru.form', ['item' => $guru, 'statusOptions' => $options]);
+        return view('datacenter.guru.form', [
+            'item' => $guru,
+            'statusOptions' => $options,
+            'mapelList' => MataPelajaran::orderBy('nama_mapel')->get(),
+            'mapelTerpilih' => $guru->guruMapel()->pluck('mata_pelajaran_id')->unique()->all(),
+        ]);
     }
 
     public function update(Request $r, Guru $guru)
     {
         $data = $this->v($r, $guru->id);
+        $mapelIds = $this->vMapel($r);
         if (empty($data['password'])) unset($data['password']);
         $guru->update($data);
+        $this->syncMapel($guru, $mapelIds);
         return redirect()->route('guru.index')->with('success', 'Data guru diperbarui.');
     }
 
@@ -139,5 +154,48 @@ class GuruController extends Controller
             'password' => 'nullable|string|min:6',
             'is_aktif' => 'nullable|boolean',
         ]) + ['is_aktif' => $r->boolean('is_aktif', true)];
+    }
+
+    /**
+     * Divalidasi terpisah dari v(), karena mapel bukan kolom tabel guru —
+     * hasil v() langsung dipakai untuk create/update model Guru.
+     */
+    protected function vMapel(Request $r): array
+    {
+        return $r->validate([
+            'mata_pelajaran_id' => 'nullable|array',
+            'mata_pelajaran_id.*' => 'integer|exists:mata_pelajaran,id',
+        ])['mata_pelajaran_id'] ?? [];
+    }
+
+    /**
+     * Simpan pilihan mapel guru ke tabel guru_mapel untuk tahun ajaran aktif,
+     * tanpa rombel (rombongan_belajar_id null). Baris yang sudah punya rombel
+     * tidak disentuh — penugasan per rombel tetap dikelola di menu Guru Mapel.
+     */
+    protected function syncMapel(Guru $guru, array $mapelIds): void
+    {
+        $ta = TahunAjaran::aktif();
+        if (! $ta) return;
+
+        DB::transaction(function () use ($guru, $mapelIds, $ta) {
+            $guru->guruMapel()
+                ->where('tahun_ajaran_id', $ta->id)
+                ->whereNull('rombongan_belajar_id')
+                ->when($mapelIds, fn ($q) => $q->whereNotIn('mata_pelajaran_id', $mapelIds))
+                ->delete();
+
+            $sudahAda = $guru->guruMapel()->where('tahun_ajaran_id', $ta->id)
+                ->pluck('mata_pelajaran_id')->unique()->all();
+
+            foreach (array_diff($mapelIds, $sudahAda) as $id) {
+                GuruMapel::create([
+                    'guru_id' => $guru->id,
+                    'mata_pelajaran_id' => $id,
+                    'rombongan_belajar_id' => null,
+                    'tahun_ajaran_id' => $ta->id,
+                ]);
+            }
+        });
     }
 }

@@ -19,6 +19,22 @@
         <x-field type="select" name="status_kepegawaian" label="Status Kepegawaian" :value="$item->status_kepegawaian"
                  :options="$statusOptions"/>
         <x-field name="password" type="password" label="Password" :help="$item->exists ? 'Kosongkan jika tidak diubah' : 'Default sama dengan password'"/>
+
+        {{-- Mapel disimpan ke tabel guru_mapel (tahun ajaran aktif), bukan kolom di tabel guru. --}}
+        <div>
+            <label class="label" for="mata_pelajaran_id">Guru Mata Pelajaran
+                <span class="text-xs text-ink-500">(bisa pilih lebih dari satu, Ctrl+klik)</span></label>
+            <select name="mata_pelajaran_id[]" id="mata_pelajaran_id" multiple size="6" class="select h-auto">
+                @foreach($mapelList as $m)
+                    <option value="{{ $m->id }}"
+                        @selected(in_array($m->id, old('mata_pelajaran_id', $mapelTerpilih)))>
+                        {{ $m->kode_mapel }} — {{ $m->nama_mapel }}
+                    </option>
+                @endforeach
+            </select>
+            <p class="mt-1 text-xs text-ink-500">Penugasan per rombel diatur di menu Guru Mapel.</p>
+            @error('mata_pelajaran_id.*')<p class="mt-1 text-xs text-rose-600">{{ $message }}</p>@enderror
+        </div>
     </div>
     <x-field name="alamat" label="Alamat" :value="$item->alamat"/>
     <x-field type="checkbox" name="is_aktif" :value="$item->is_aktif ?? true"/>
