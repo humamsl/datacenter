@@ -8,7 +8,6 @@ use App\Models\SiswaRombel;
 use App\Models\TahunAjaran;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -44,9 +43,17 @@ class SiswaExcelService
         $result = new ImportResult();
 
         try {
-            $spreadsheet = IOFactory::load($file->getRealPath());
+            $path = $file->getRealPath();
+            // Baca nilai mentah saja — styling & number format tidak perlu untuk
+            // import, dan mem-parse-nya adalah bagian termahal dari membuka xlsx
+            // dengan ribuan baris.
+            $reader = IOFactory::createReaderForFile($path);
+            $reader->setReadDataOnly(true);
+            $spreadsheet = $reader->load($path);
             $sheet = $spreadsheet->getActiveSheet();
             $data  = $sheet->toArray(null, true, true, false);
+            $spreadsheet->disconnectWorksheets();
+            unset($spreadsheet, $reader);
         } catch (\Throwable $e) {
             $result->failed++;
             $result->errors[] = 'Gagal membaca file Excel: '.$e->getMessage();
@@ -62,14 +69,38 @@ class SiswaExcelService
             ? RombonganBelajar::where('tahun_ajaran_id', $ta->id)->pluck('id', 'nama_rombel')->toArray()
             : [];
 
+        // Petakan dulu semua baris ke bentuk assoc supaya NISN-nya bisa dikumpulkan
+        // dan siswa yang sudah ada diambil sekaligus di bawah — bukan satu SELECT
+        // per baris seperti sebelumnya.
+        $rows = [];
         foreach ($data as $i => $row) {
-            try {
-                $assoc = [];
-                foreach ($headers as $idx => $h) {
-                    $assoc[$h] = $row[$idx] ?? null;
-                }
-                if (empty($assoc['nisn']) || empty($assoc['nama_siswa'])) continue;
+            $assoc = [];
+            foreach ($headers as $idx => $h) {
+                $assoc[$h] = $row[$idx] ?? null;
+            }
+            if (empty($assoc['nisn']) || empty($assoc['nama_siswa'])) continue;
+            $assoc['nisn'] = trim((string) $assoc['nisn']);
+            $rows[$i] = $assoc;
+        }
+        unset($data);
 
+        // Array biasa, bukan Collection::merge() — merge() mengindeks ulang key
+        // numerik, dan NISN hampir selalu numerik.
+        $existing = [];
+        foreach (array_chunk(array_values(array_unique(array_column($rows, 'nisn'))), 1000) as $chunk) {
+            foreach (Siswa::whereIn('nisn', $chunk)->get() as $s) {
+                $existing[$s->nisn] = $s;
+            }
+        }
+
+        // Rombel yang sudah terpasang di TA aktif, supaya updateOrCreate hanya
+        // dijalankan untuk siswa yang kelasnya benar-benar berubah.
+        $rombelSiswaMap = $ta
+            ? SiswaRombel::where('tahun_ajaran_id', $ta->id)->pluck('rombongan_belajar_id', 'siswa_id')->toArray()
+            : [];
+
+        foreach ($rows as $i => $assoc) {
+            try {
                 $payload = [
                     'nis'           => $assoc['nis'] ?: null,
                     'nama_siswa'    => trim((string) $assoc['nama_siswa']),
@@ -87,35 +118,50 @@ class SiswaExcelService
                     'is_aktif'      => $this->parseBool($assoc['is_aktif'] ?? 1, true),
                 ];
 
+                // Password di-hash oleh cast 'hashed' pada model, jadi cukup diisi
+                // apa adanya. Baris tanpa kolom password pada siswa yang sudah ada
+                // tidak menyentuh hashing sama sekali.
                 $pwd = trim((string) ($assoc['password'] ?? ''));
                 if ($pwd !== '') {
-                    $payload['password'] = Hash::make($pwd);
+                    $payload['password'] = $pwd;
                 }
 
-                DB::transaction(function () use ($assoc, $payload, $rombelMap, $ta) {
-                    $s = Siswa::where('nisn', $assoc['nisn'])->first();
-                    if ($s) {
-                        $s->update($payload);
+                // Nama rombel divalidasi sebelum menyentuh DB supaya baris yang
+                // salah nama kelas tidak sempat menulis apa pun.
+                $rombelName = trim((string) ($assoc['rombel'] ?? ''));
+                $rombelId = null;
+                if ($rombelName !== '' && $ta) {
+                    $rombelId = $rombelMap[$rombelName] ?? null;
+                    if (! $rombelId) {
+                        throw new \RuntimeException("Rombel '{$rombelName}' tidak ditemukan di TA aktif.");
+                    }
+                }
+
+                $siswa = $existing[$assoc['nisn']] ?? null;
+
+                $siswa = DB::transaction(function () use ($siswa, $assoc, $payload, $rombelId, $ta, &$rombelSiswaMap) {
+                    if ($siswa) {
+                        $siswa->update($payload);
                     } else {
-                        $payload['password'] = $payload['password'] ?? Hash::make((string) $assoc['nisn']);
-                        $payload['nisn'] = (string) $assoc['nisn'];
-                        $s = Siswa::create($payload);
+                        $payload['password'] = $payload['password'] ?? $assoc['nisn'];
+                        $payload['nisn'] = $assoc['nisn'];
+                        $siswa = Siswa::create($payload);
                     }
 
-                    // Sync rombel jika kolom diisi dan TA aktif tersedia
-                    $rombelName = trim((string) ($assoc['rombel'] ?? ''));
-                    if ($rombelName !== '' && $ta) {
-                        $rombelId = $rombelMap[$rombelName] ?? null;
-                        if ($rombelId) {
-                            SiswaRombel::updateOrCreate(
-                                ['siswa_id' => $s->id, 'tahun_ajaran_id' => $ta->id],
-                                ['rombongan_belajar_id' => $rombelId]
-                            );
-                        } else {
-                            throw new \RuntimeException("Rombel '{$rombelName}' tidak ditemukan di TA aktif.");
-                        }
+                    if ($rombelId && ($rombelSiswaMap[$siswa->id] ?? null) !== $rombelId) {
+                        SiswaRombel::updateOrCreate(
+                            ['siswa_id' => $siswa->id, 'tahun_ajaran_id' => $ta->id],
+                            ['rombongan_belajar_id' => $rombelId]
+                        );
+                        $rombelSiswaMap[$siswa->id] = $rombelId;
                     }
+
+                    return $siswa;
                 });
+
+                // Kalau NISN yang sama muncul dua kali dalam satu file, kemunculan
+                // kedua harus meng-update baris yang barusan dibuat, bukan bikin baru.
+                $existing[$assoc['nisn']] = $siswa;
 
                 $result->success++;
             } catch (\Throwable $e) {

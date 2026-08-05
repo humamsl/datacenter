@@ -134,7 +134,14 @@ class SiswaController extends Controller
         // max_execution_time default (30 detik) dan berhenti mendadak (500) di
         // tengah loop meski sebagian baris sudah ter-commit. Hilangkan batas waktu
         // khusus untuk request import ini saja.
+        //
+        // set_time_limit() hanya melepas batas PHP — nginx punya fastcgi_read_timeout
+        // sendiri dan akan menampilkan 504 ke browser lebih dulu kalau nilainya lebih
+        // kecil (lihat catatan di konfigurasi server). ignore_user_abort memastikan
+        // import tetap tuntas kalau itu terjadi, bukan berhenti di tengah data.
         set_time_limit(0);
+        ignore_user_abort(true);
+        ini_set('memory_limit', '512M');
 
         $result = $svc->import($r->file('file'));
 
