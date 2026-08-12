@@ -4,7 +4,9 @@ namespace App\Providers;
 
 use App\Models\AppSetting;
 use App\Models\Sekolah;
+use App\Support\CopyrightGuard;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Schema;
@@ -33,6 +35,17 @@ class AppServiceProvider extends ServiceProvider
 
         // Bagikan pengaturan aplikasi ke semua view
         View::composer('*', function ($view) {
+            // Lapis kedua proteksi hak cipta (independen dari middleware): karena
+            // composer ini WAJIB jalan agar branding/AppCfg tampil di setiap
+            // halaman, menghapusnya merusak aplikasi juga. Halaman kunci itu
+            // sendiri dilewati agar tidak rekursif.
+            if ($view->name() === 'errors.copyright') {
+                return;
+            }
+            if (! CopyrightGuard::passes()) {
+                throw new HttpResponseException(response()->view('errors.copyright', [], 403));
+            }
+
             // Skip jika tabel belum migrate (mis. saat install)
             if (! Schema::hasTable('app_settings')) {
                 $view->with('AppCfg', $this->defaults());

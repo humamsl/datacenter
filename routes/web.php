@@ -69,6 +69,10 @@ Route::middleware([
         Route::resource('tahun-ajaran', TahunAjaranController::class)
             ->except('show')->parameters(['tahun-ajaran' => 'tahunAjaran']);
         Route::resource('jurusan', JurusanController::class)->except('show');
+        Route::get('/mapel/import',          [MataPelajaranController::class, 'importForm'])->name('mapel.import.form');
+        Route::post('/mapel/import',         [MataPelajaranController::class, 'importStore'])->name('mapel.import.store');
+        Route::get('/mapel/import-template', [MataPelajaranController::class, 'importTemplate'])->name('mapel.import.template');
+        Route::get('/mapel/export/excel',    [MataPelajaranController::class, 'exportExcel'])->name('mapel.export.excel');
         Route::resource('mapel', MataPelajaranController::class)->except('show')
             ->parameters(['mapel' => 'mapel']);
         Route::get('/rombel/import',          [RombelController::class, 'importForm'])->name('rombel.import.form');

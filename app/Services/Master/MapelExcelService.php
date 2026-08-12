@@ -2,10 +2,8 @@
 
 namespace App\Services\Master;
 
-use App\Models\Guru;
 use App\Models\Jurusan;
-use App\Models\RombonganBelajar;
-use App\Models\TahunAjaran;
+use App\Models\MataPelajaran;
 use App\Services\Master\Concerns\ResolvesTingkat;
 use Illuminate\Http\UploadedFile;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
@@ -17,25 +15,26 @@ use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
- * Import / Export Rombongan Belajar + Wali Kelas (Excel).
+ * Import / Export Mata Pelajaran (Excel).
  *
  * Kolom (baris 1):
- *   nama_rombel | tingkat | kode_jurusan | tahun_ajaran | nip_wali_kelas | kapasitas
+ *   kode_mapel | nama_mapel | kelompok | tingkat | kode_jurusan | deskripsi | is_aktif
  *
- * - nama_rombel    : wajib. Kunci unik bersama tahun_ajaran (upsert berdasarkan ini).
- * - tingkat        : wajib. Boleh angka (10), kode / romawi (X), atau nama tingkat
- *                    ("Kelas X (10)") — dicocokkan ke master Tingkat Kelas.
- * - kode_jurusan   : opsional, kode jurusan (harus sudah terdaftar kalau diisi).
- * - tahun_ajaran   : opsional. Nama TA persis. Kosong -> pakai TA aktif.
- * - nip_wali_kelas : opsional, NIP guru (harus sudah terdaftar kalau diisi).
- * - kapasitas      : opsional, angka. Kosong -> default 36.
+ * - kode_mapel   : wajib. Kunci unik (upsert berdasarkan kolom ini).
+ * - nama_mapel   : wajib.
+ * - kelompok     : opsional, mis. Umum / Kejuruan / Muatan Lokal.
+ * - tingkat      : opsional. Boleh angka (10), kode / romawi (X), atau nama tingkat
+ *                  ("Kelas X (10)"). Kosong -> mapel berlaku untuk semua tingkat.
+ * - kode_jurusan : opsional, kode jurusan (harus sudah terdaftar kalau diisi).
+ * - deskripsi    : opsional.
+ * - is_aktif     : opsional. Ya/Tidak, 1/0, Aktif/Non-aktif. Kosong -> Ya.
  */
-class RombelExcelService
+class MapelExcelService
 {
     use ResolvesTingkat;
 
     public const HEADERS = [
-        'nama_rombel', 'tingkat', 'kode_jurusan', 'tahun_ajaran', 'nip_wali_kelas', 'kapasitas',
+        'kode_mapel', 'nama_mapel', 'kelompok', 'tingkat', 'kode_jurusan', 'deskripsi', 'is_aktif',
     ];
 
     public function import(UploadedFile $file): ImportResult
@@ -48,12 +47,9 @@ class RombelExcelService
         if (count($data) < 2) return $result;
 
         $headers = array_map(fn ($v) => trim(strtolower((string) $v)), array_shift($data));
-        $taAktif = TahunAjaran::aktif();
 
         // Cache lookup biar cepat (natural key -> id)
         $jurusanCache = Jurusan::pluck('id', 'kode_jurusan');
-        $guruCache    = Guru::pluck('id', 'nip');
-        $taCache      = TahunAjaran::pluck('id', 'nama_tahun_ajaran');
         $tingkatCache = $this->tingkatLookup();
 
         foreach ($data as $i => $row) {
@@ -64,27 +60,20 @@ class RombelExcelService
                     $assoc[$h] = $row[$idx] ?? null;
                 }
 
-                $namaRombel = trim((string) ($assoc['nama_rombel'] ?? ''));
-                $tingkat    = trim((string) ($assoc['tingkat'] ?? ''));
+                $kodeMapel   = trim((string) ($assoc['kode_mapel'] ?? ''));
+                $namaMapel   = trim((string) ($assoc['nama_mapel'] ?? ''));
+                $kelompok    = trim((string) ($assoc['kelompok'] ?? ''));
+                $tingkat     = trim((string) ($assoc['tingkat'] ?? ''));
                 $kodeJurusan = trim((string) ($assoc['kode_jurusan'] ?? ''));
-                $namaTa     = trim((string) ($assoc['tahun_ajaran'] ?? ''));
-                $nipWali    = trim((string) ($assoc['nip_wali_kelas'] ?? ''));
-                $kapasitas  = trim((string) ($assoc['kapasitas'] ?? ''));
+                $deskripsi   = trim((string) ($assoc['deskripsi'] ?? ''));
+                $isAktif     = trim((string) ($assoc['is_aktif'] ?? ''));
 
-                if ($namaRombel === '' || $tingkat === '') {
-                    throw new \RuntimeException('nama_rombel & tingkat wajib diisi');
+                if ($kodeMapel === '' || $namaMapel === '') {
+                    throw new \RuntimeException('kode_mapel & nama_mapel wajib diisi');
                 }
 
-                $nomorTingkat = $this->resolveTingkat($tingkat, $tingkatCache);
-
-                $taId = null;
-                if ($namaTa !== '') {
-                    $taId = $taCache[$namaTa] ?? null;
-                    if (! $taId) throw new \RuntimeException("Tahun ajaran '{$namaTa}' tidak ditemukan");
-                } else {
-                    if (! $taAktif) throw new \RuntimeException('Tidak ada Tahun Ajaran aktif');
-                    $taId = $taAktif->id;
-                }
+                // tingkat opsional: mapel bisa berlaku untuk semua tingkat
+                $nomorTingkat = $tingkat !== '' ? $this->resolveTingkat($tingkat, $tingkatCache) : null;
 
                 $jurusanId = null;
                 if ($kodeJurusan !== '') {
@@ -92,19 +81,15 @@ class RombelExcelService
                     if (! $jurusanId) throw new \RuntimeException("Jurusan kode '{$kodeJurusan}' tidak ditemukan");
                 }
 
-                $waliId = null;
-                if ($nipWali !== '') {
-                    $waliId = $guruCache[$nipWali] ?? null;
-                    if (! $waliId) throw new \RuntimeException("Guru NIP '{$nipWali}' tidak ditemukan");
-                }
-
-                RombonganBelajar::updateOrCreate(
-                    ['nama_rombel' => $namaRombel, 'tahun_ajaran_id' => $taId],
+                MataPelajaran::updateOrCreate(
+                    ['kode_mapel' => $kodeMapel],
                     [
-                        'tingkat' => $nomorTingkat,
+                        'nama_mapel' => $namaMapel,
+                        'kelompok'   => $kelompok !== '' ? $kelompok : null,
+                        'tingkat'    => $nomorTingkat,
                         'jurusan_id' => $jurusanId,
-                        'wali_kelas_id' => $waliId,
-                        'kapasitas' => $kapasitas !== '' ? (int) $kapasitas : 36,
+                        'deskripsi'  => $deskripsi !== '' ? $deskripsi : null,
+                        'is_aktif'   => $this->parseBool($isAktif, true),
                     ]
                 );
 
@@ -120,24 +105,25 @@ class RombelExcelService
 
     public function export(?\Illuminate\Database\Eloquent\Collection $items = null): StreamedResponse
     {
-        $items ??= RombonganBelajar::with('jurusan', 'tahunAjaran', 'waliKelas')
-            ->orderBy('tingkat')->orderBy('nama_rombel')->get();
+        $items ??= MataPelajaran::with('jurusan')
+            ->orderBy('tingkat')->orderBy('nama_mapel')->get();
 
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
-        $sheet->setTitle('Rombongan Belajar');
+        $sheet->setTitle('Mata Pelajaran');
 
         $sheet->fromArray([self::HEADERS], null, 'A1');
         $this->styleHeader($sheet, count(self::HEADERS));
         $this->forceTextColumns($sheet, count(self::HEADERS));
 
-        $rows = $items->map(fn ($r) => [
-            $r->nama_rombel,
-            $r->tingkat,
-            optional($r->jurusan)->kode_jurusan,
-            optional($r->tahunAjaran)->nama_tahun_ajaran,
-            optional($r->waliKelas)->nip,
-            $r->kapasitas,
+        $rows = $items->map(fn ($m) => [
+            $m->kode_mapel,
+            $m->nama_mapel,
+            $m->kelompok,
+            $m->tingkat,
+            optional($m->jurusan)->kode_jurusan,
+            $m->deskripsi,
+            $m->is_aktif ? 'Ya' : 'Tidak',
         ])->toArray();
 
         $this->writeRowsAsText($sheet, $rows, 2);
@@ -146,33 +132,45 @@ class RombelExcelService
             $sheet->getColumnDimension($col)->setAutoSize(true);
         }
 
-        return $this->stream($spreadsheet, 'data-rombel-'.date('Ymd-His').'.xlsx');
+        return $this->stream($spreadsheet, 'data-mapel-'.date('Ymd-His').'.xlsx');
     }
 
     public function template(): StreamedResponse
     {
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
-        $sheet->setTitle('Template Rombel');
+        $sheet->setTitle('Template Mapel');
 
         $sheet->fromArray([self::HEADERS], null, 'A1');
         $this->styleHeader($sheet, count(self::HEADERS));
         $this->forceTextColumns($sheet, count(self::HEADERS));
 
         $this->writeRowsAsText($sheet, [
-            ['X IPA 1',  '10', 'IPA', '', '198001012000031000', '36'],
-            ['XI IPS 2', '11', 'IPS', '2024/2025 - Ganjil', '198502102001012001', '32'],
-            ['7-1',      '7',  '',    '', '', ''],
+            ['MTK',    'Matematika',           'Umum',        '',   '',     '',                          'Ya'],
+            ['BIND',   'Bahasa Indonesia',     'Umum',        '',   '',     '',                          'Ya'],
+            ['PBO-XI', 'Pemrograman Berorientasi Objek', 'Kejuruan', 'XI', 'RPL', 'Mapel produktif RPL', 'Ya'],
         ], 2);
 
         foreach (range('A', chr(64 + count(self::HEADERS))) as $col) {
             $sheet->getColumnDimension($col)->setAutoSize(true);
         }
 
-        return $this->stream($spreadsheet, 'template-import-rombel.xlsx');
+        return $this->stream($spreadsheet, 'template-import-mapel.xlsx');
     }
 
     /* ---------- helpers (sama seperti service Excel lainnya) ---------- */
+
+    /** "Ya/Tidak", "Aktif/Non-aktif", "1/0", "true/false" -> boolean. */
+    protected function parseBool(string $value, bool $default): bool
+    {
+        $v = strtolower(trim($value));
+        if ($v === '') return $default;
+
+        if (in_array($v, ['ya', 'y', 'yes', '1', 'true', 'aktif', 'a'], true)) return true;
+        if (in_array($v, ['tidak', 't', 'no', 'n', '0', 'false', 'non-aktif', 'nonaktif', 'non aktif'], true)) return false;
+
+        return $default;
+    }
 
     protected function styleHeader($sheet, int $colCount): void
     {
