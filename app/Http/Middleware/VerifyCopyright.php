@@ -6,10 +6,6 @@ use App\Support\CopyrightGuard;
 use Closure;
 use Illuminate\Http\Request;
 
-/**
- * Kunci seluruh aplikasi bila teks hak cipta AnonymouSL diubah/dihapus.
- * Berpasangan dengan App\Support\CopyrightGuard.
- */
 class VerifyCopyright
 {
     public function handle(Request $request, Closure $next)
