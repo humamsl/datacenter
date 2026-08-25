@@ -49,7 +49,7 @@
             <li><code>jenis_kelamin</code>: <code>L</code> atau <code>P</code></li>
             <li><code>tanggal_lahir</code>: <code>YYYY-MM-DD</code> atau format tanggal Excel</li>
             <li><code>rombel</code>: nama rombel persis di Tahun Ajaran <strong>aktif</strong> (mis. <code>X IPA 1</code>). Akan otomatis dipasang.</li>
-            <li><code>password</code> opsional. Jika kosong & akun baru, default = NISN.</li>
+            <li><code>password</code> opsional. Jika kosong & akun baru, default = <code>123456</code>.</li>
             <li><code>is_aktif</code>: 1 atau 0 (jika kosong = 1)</li>
         </ul>
     </div>

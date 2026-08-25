@@ -28,7 +28,7 @@
         <x-field type="select" name="rombongan_belajar_id" label="Rombongan Belajar"
                  :value="optional($item->rombelSekarang)->rombongan_belajar_id"
                  :options="$rombel->mapWithKeys(fn($r) => [$r->id => $r->nama_rombel.' — '.optional($r->tahunAjaran)->nama_tahun_ajaran])->toArray()"/>
-        <x-field name="password" type="password" label="Password" :help="$item->exists ? 'Kosongkan jika tidak diubah' : 'Default sama dengan password'"/>
+        <x-field name="password" type="password" label="Password" :help="$item->exists ? 'Kosongkan jika tidak diubah' : 'Kosongkan untuk memakai password default: 123456'"/>
     </div>
     <x-field type="checkbox" name="is_aktif" :value="$item->is_aktif ?? true"/>
 

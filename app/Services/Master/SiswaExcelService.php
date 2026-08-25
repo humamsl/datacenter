@@ -27,7 +27,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  * - jenis_kelamin: L atau P
  * - tanggal_lahir: YYYY-MM-DD
  * - rombel: nama rombel pada Tahun Ajaran aktif (mis. "X IPA 1"). Akan di-cari & dipasang otomatis.
- * - password: opsional. Default = 12345678.
+ * - password: opsional. Default untuk siswa baru = 123456.
  * - is_aktif: 1 / 0 / kosong (default 1)
  */
 class SiswaExcelService
@@ -143,7 +143,8 @@ class SiswaExcelService
                     if ($siswa) {
                         $siswa->update($payload);
                     } else {
-                        $payload['password'] = $payload['password'] ?? $assoc['nisn'];
+                        // Kolom password kosong pada siswa baru -> pakai password default (123456).
+                        $payload['password'] = $payload['password'] ?? Siswa::DEFAULT_PASSWORD;
                         $payload['nisn'] = $assoc['nisn'];
                         $siswa = Siswa::create($payload);
                     }

@@ -12,6 +12,9 @@ class Siswa extends Authenticatable
 {
     use HasFactory, Notifiable, HasRbac;
 
+    /** Password awal siswa baru saat kolom password dikosongkan (form & import). */
+    public const DEFAULT_PASSWORD = '123456';
+
     protected $table = 'siswa';
     protected $guarded = ['id'];
     protected $hidden = ['password', 'remember_token'];

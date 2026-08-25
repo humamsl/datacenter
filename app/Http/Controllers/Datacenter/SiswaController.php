@@ -29,10 +29,14 @@ class SiswaController extends Controller
             })
             ->leftJoin('rombongan_belajar', 'rombongan_belajar.id', '=', 'siswa_rombel.rombongan_belajar_id')
             ->with(['rombelSekarang.rombel'])
+            // Dibungkus grup sendiri supaya OR pencarian tidak "bocor" keluar dan
+            // membatalkan filter kelas di bawah (AND lebih kuat dari OR di SQL).
             ->when($r->q, function ($x) use ($r) {
-                $x->where('siswa.nama_siswa', 'like', "%{$r->q}%")
-                  ->orWhere('siswa.nisn', 'like', "%{$r->q}%")
-                  ->orWhere('siswa.nis', 'like', "%{$r->q}%");
+                $x->where(function ($w) use ($r) {
+                    $w->where('siswa.nama_siswa', 'like', "%{$r->q}%")
+                      ->orWhere('siswa.nisn', 'like', "%{$r->q}%")
+                      ->orWhere('siswa.nis', 'like', "%{$r->q}%");
+                });
             })
             ->when($r->rombel, fn ($x) => $x->where('rombongan_belajar.id', $r->rombel))
             ->orderByRaw('rombongan_belajar.tingkat is null')
@@ -61,7 +65,8 @@ class SiswaController extends Controller
     {
         DB::transaction(function () use ($r) {
             $data = $this->v($r);
-            $data['password'] = $data['password'] ?? '12345678'; //password default untuk siswa baru
+            // Kolom password dikosongkan di form -> pakai password default (123456).
+            if (empty($data['password'])) $data['password'] = Siswa::DEFAULT_PASSWORD;
             $siswa = Siswa::create($data);
             $this->syncRombel($r, $siswa);
         });
