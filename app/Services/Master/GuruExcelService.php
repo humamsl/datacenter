@@ -46,6 +46,25 @@ class GuruExcelService
 
         if (count($data) < 2) return $result;
 
+        // NIP wajib dibaca dari sel bertipe TEKS. NIP 18 digit jauh melebihi
+        // presisi aman floating point Excel (~15-16 digit) — kalau sel-nya
+        // ketikan/paste sebagai ANGKA, beberapa digit terakhirnya sudah berubah
+        // permanen di dalam file itu sendiri, sebelum sempat dibaca di sini.
+        // Baris begini ditandai supaya ditolak di bawah, bukan diam-diam
+        // tersimpan dengan NIP yang salah (NIP dipakai sebagai username login guru).
+        $headerRow = array_map(fn ($v) => trim(strtolower((string) $v)), $data[0] ?? []);
+        $nipColIdx = array_search('nip', $headerRow, true);
+        $numericNipRows = [];
+        if ($nipColIdx !== false) {
+            foreach ($data as $rowIdx => $row) {
+                if ($rowIdx === 0) continue; // header
+                $cell = $sheet->getCell([$nipColIdx + 1, $rowIdx + 1]);
+                if ($cell->getDataType() === DataType::TYPE_NUMERIC) {
+                    $numericNipRows[$rowIdx - 1] = true; // -1: sejajar dgn index setelah header dibuang
+                }
+            }
+        }
+
         $headers = array_map(fn ($v) => trim(strtolower((string) $v)), array_shift($data));
 
         foreach ($data as $i => $row) {
@@ -55,6 +74,12 @@ class GuruExcelService
                     $assoc[$h] = $row[$idx] ?? null;
                 }
                 if (empty($assoc['nip']) || empty($assoc['nama_ptk'])) continue;
+
+                if ($numericNipRows[$i] ?? false) {
+                    $result->failed++;
+                    $result->errors[] = 'Baris '.($i + 2).": kolom NIP terbaca sebagai angka (bukan teks) sehingga sebagian digit terakhirnya sudah berubah akibat pembulatan Excel. Format ulang kolom NIP di file jadi Text, isi ulang NIP-nya, lalu upload kembali.";
+                    continue;
+                }
 
                 $payload = [
                     'nama_ptk'           => trim((string) $assoc['nama_ptk']),

@@ -52,6 +52,28 @@ class SiswaExcelService
             $spreadsheet = $reader->load($path);
             $sheet = $spreadsheet->getActiveSheet();
             $data  = $sheet->toArray(null, true, true, false);
+
+            // NISN wajib dibaca dari sel bertipe TEKS. NISN 10+ digit melebihi
+            // presisi aman floating point Excel (~15-16 digit) — kalau sel-nya
+            // ketikan/paste sebagai ANGKA, beberapa digit terakhir sudah berubah
+            // permanen di dalam file itu sendiri, sebelum sempat dibaca di sini.
+            // Baris begini ditandai supaya ditolak di bawah, bukan diam-diam
+            // tersimpan dengan NISN yang salah (NISN dipakai sebagai username
+            // login siswa). Deteksi ini butuh tipe sel asli — makanya dilakukan
+            // sebelum worksheet di-disconnect.
+            $headerRow = array_map(fn ($v) => trim(strtolower((string) $v)), $data[0] ?? []);
+            $nisnColIdx = array_search('nisn', $headerRow, true);
+            $numericNisnRows = [];
+            if ($nisnColIdx !== false) {
+                foreach ($data as $rowIdx => $row) {
+                    if ($rowIdx === 0) continue; // header
+                    $cell = $sheet->getCell([$nisnColIdx + 1, $rowIdx + 1]);
+                    if ($cell->getDataType() === DataType::TYPE_NUMERIC) {
+                        $numericNisnRows[$rowIdx - 1] = true; // -1: sejajar dgn index setelah header dibuang
+                    }
+                }
+            }
+
             $spreadsheet->disconnectWorksheets();
             unset($spreadsheet, $reader);
         } catch (\Throwable $e) {
@@ -79,6 +101,13 @@ class SiswaExcelService
                 $assoc[$h] = $row[$idx] ?? null;
             }
             if (empty($assoc['nisn']) || empty($assoc['nama_siswa'])) continue;
+
+            if ($numericNisnRows[$i] ?? false) {
+                $result->failed++;
+                $result->errors[] = 'Baris '.($i + 2).": kolom NISN terbaca sebagai angka (bukan teks) sehingga sebagian digit terakhirnya sudah berubah akibat pembulatan Excel. Format ulang kolom NISN di file jadi Text, isi ulang NISN-nya, lalu upload kembali.";
+                continue;
+            }
+
             $assoc['nisn'] = trim((string) $assoc['nisn']);
             $rows[$i] = $assoc;
         }
