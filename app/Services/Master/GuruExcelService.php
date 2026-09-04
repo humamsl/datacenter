@@ -104,8 +104,15 @@ class GuruExcelService
                 if ($g) {
                     $g->update($payload);
                 } else {
-                    // Akun baru: password default = password jika tidak diisi
-                    $payload['password'] = $payload['password'] ?? Hash::make((string) ($assoc['password'] ?? 'password'));
+                    // Akun baru: password default = "password" kalau tidak diisi.
+                    // WAJIB pakai $pwd (bukan baca ulang $assoc['password'] via ??) --
+                    // sel password di file Excel hasil Export/Template ditulis eksplisit
+                    // sebagai string kosong (bukan sel kosong beneran), jadi $assoc['password']
+                    // bisa berisi '' (bukan null) dan '' ?? 'password' TIDAK fallback ke
+                    // 'password' karena ?? cuma bereaksi ke null. Akibatnya password ter-hash
+                    // dari STRING KOSONG, bukan dari kata "password" -- guru tidak pernah bisa
+                    // login pakai password default walau hash-nya kelihatan valid.
+                    $payload['password'] = $payload['password'] ?? Hash::make('password');
                     $payload['nip'] = (string) $assoc['nip'];
                     Guru::create($payload);
                 }
